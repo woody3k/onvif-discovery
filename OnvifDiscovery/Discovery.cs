@@ -53,22 +53,22 @@ namespace OnvifDiscovery
 			CancellationToken cancellationToken = default)
 		{
 			var clients = clientFactory.CreateClientForeachInterface ();
-			
+
 			if (!clients.Any ()) {
 				throw new DiscoveryException ("Missing valid NetworkInterfaces, UdpClients could not be created");
 			}
 
 			var discoveredDevicesIPs = new ConcurrentDictionary<string, bool> ();
-			void deviceDiscovered(DiscoveryDevice discoveryDevice)
+			void deviceDiscovered (DiscoveryDevice discoveryDevice)
 			{
-				if (discoveredDevicesIPs.TryAdd(discoveryDevice.Address, true)) {
+				if (discoveredDevicesIPs.TryAdd (discoveryDevice.Address, true)) {
 					onDeviceDiscovered (discoveryDevice);
 				}
 			}
 
-			var discoveries = clients.Select (client => Discover (timeout, client, deviceDiscovered, cancellationToken)).ToArray();
+			var discoveries = clients.Select (client => Discover (timeout, client, deviceDiscovered, cancellationToken)).ToArray ();
 
-			await Task.WhenAll(discoveries);
+			await Task.WhenAll (discoveries);
 		}
 
 		/// <summary>
@@ -98,28 +98,47 @@ namespace OnvifDiscovery
 			try {
 				await SendProbe (client, messageId);
 				while (true) {
-					if (cts.IsCancellationRequested || cancellationToken.IsCancellationRequested)
+					if (cts.IsCancellationRequested || cancellationToken.IsCancellationRequested) {
+						Console.WriteLine ("Timeout/Cancelled - break wait loop");
 						break;
+					}
 					try {
-						var response = await client.ReceiveAsync ()
-										.WithCancellation (cancellationToken)
-										.WithCancellation (cts.Token);
+						using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource (cancellationToken, cts.Token)) {
 
-						if (IsAlreadyDiscovered (response, responses))
-							continue;
+							var task = client.ReceiveAsync ();
+							// Catch/Log any exceptions when task completes (eg. in finalizer even after OperationCanceledException)
+							//task.CatchUnhandledTaskExceptions ();
+							//var response = await task.WithCancellation(linkedCts.Token);
 
-						responses.Add (response);
-						var discoveredDevice = ProcessResponse (response, messageId);
-						if (discoveredDevice != null) {
+							var tcs = new TaskCompletionSource<bool> ();
+							using (linkedCts.Token.Register (s => ((TaskCompletionSource<bool>)s).TrySetResult (true), tcs)) {
+								if (task != await Task.WhenAny (task, tcs.Task)) {
+									//throw new OperationCanceledException (cancellationToken);
+									Console.WriteLine ("Token cancelled, close UdpClient");
+									client.Close ();
+								}
+							}
+
+							var response = await task;
+
+							if (IsAlreadyDiscovered (response, responses))
+								continue;
+
+							responses.Add (response);
+							var discoveredDevice = ProcessResponse (response, messageId);
+							if (discoveredDevice != null) {
 #pragma warning disable 4014 // Just trigger the callback and forget about it. This is expected to avoid locking the loop
-							Task.Run (() => onDeviceDiscovered (discoveredDevice));
+								Task.Run (() => onDeviceDiscovered (discoveredDevice));
 #pragma warning restore 4014
+							}
 						}
 					} catch (OperationCanceledException) {
 						// Either the user canceled the action or the timeout has fired
-					} catch (Exception) {
+						Console.WriteLine ("Operation Cancelled");
+					} catch (Exception ex) {
 						// we catch all exceptions !
 						// Something might be bad in the response of a camera when call ReceiveAsync (BeginReceive in socket) fail
+						Console.WriteLine ($"Discovery Exception: {ex.Message}");
 					}
 				}
 			} finally {

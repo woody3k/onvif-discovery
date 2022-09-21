@@ -9,8 +9,9 @@ namespace OnvifDiscovery.CLI
 	{
 		static async Task Main ()
 		{
-			Console.WriteLine ("Starting Discover ONVIF cameras for 10 seconds, press Ctrl+C to abort\n");
+			TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
 
+			Console.WriteLine ("Starting Discover ONVIF cameras for 10 seconds, press Ctrl+C to abort\n");
 			var cts = new CancellationTokenSource ();
 			Console.CancelKeyPress += (s, e) => {
 				e.Cancel = true;
@@ -19,14 +20,17 @@ namespace OnvifDiscovery.CLI
 			var discovery = new Discovery ();
 			await discovery.Discover (10, OnNewDevice, cts.Token);
 			Console.WriteLine ("ONVIF Discovery finished");
+
+			Thread.Sleep (5000);
+
+			Console.ReadLine ();
 		}
 
 		private static void OnNewDevice (DiscoveryDevice device)
 		{
 			// Multiple events could be received at the same time.
 			// The lock is here to avoid messing the console.
-			lock (Console.Out)
-			{
+			lock (Console.Out) {
 				Console.WriteLine (
 					$"Device model {device.Model} from manufacturer {device.Mfr} has address {device.Address}");
 				Console.Write ($"Urls to device: ");
@@ -36,6 +40,14 @@ namespace OnvifDiscovery.CLI
 
 				Console.WriteLine ("\n");
 			}
+		}
+
+		static void TaskScheduler_UnobservedTaskException (object sender, UnobservedTaskExceptionEventArgs e)
+		{
+			// NB. from .NET 4.5 onwards no longer terminates process by default, but still a useful logging opportunity
+			e.SetObserved ();
+
+			Console.WriteLine (e.Exception);
 		}
 	}
 }

@@ -19,5 +19,14 @@ namespace OnvifDiscovery.Common
 			}
 			return await task;
 		}
+
+		public static void CatchUnhandledTaskExceptions (this Task task)
+		{
+			task.ContinueWith (t => {
+				var aggException = t.Exception.Flatten ();
+				foreach (var exception in aggException.InnerExceptions)
+					Console.WriteLine ($"Unhandled Exception: {exception.Message}");
+			}, TaskContinuationOptions.OnlyOnFaulted);
+		}
 	}
 }
