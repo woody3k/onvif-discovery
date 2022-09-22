@@ -9,8 +9,6 @@ namespace OnvifDiscovery.CLI
 	{
 		static async Task Main ()
 		{
-			TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-
 			Console.WriteLine ("Starting Discover ONVIF cameras for 10 seconds, press Ctrl+C to abort\n");
 			var cts = new CancellationTokenSource ();
 			Console.CancelKeyPress += (s, e) => {
@@ -40,14 +38,6 @@ namespace OnvifDiscovery.CLI
 
 				Console.WriteLine ("\n");
 			}
-		}
-
-		static void TaskScheduler_UnobservedTaskException (object sender, UnobservedTaskExceptionEventArgs e)
-		{
-			// NB. from .NET 4.5 onwards no longer terminates process by default, but still a useful logging opportunity
-			e.SetObserved ();
-
-			Console.WriteLine (e.Exception);
 		}
 	}
 }

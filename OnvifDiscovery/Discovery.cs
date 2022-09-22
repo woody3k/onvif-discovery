@@ -98,10 +98,9 @@ namespace OnvifDiscovery
 			try {
 				await SendProbe (client, messageId);
 				while (true) {
-					if (cts.IsCancellationRequested || cancellationToken.IsCancellationRequested) {
-						Console.WriteLine ("Timeout/Cancelled - break wait loop");
+					if (cts.IsCancellationRequested || cancellationToken.IsCancellationRequested)
 						break;
-					}
+
 					try {
 						using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource (cancellationToken, cts.Token)) {
 
@@ -113,8 +112,6 @@ namespace OnvifDiscovery
 							var tcs = new TaskCompletionSource<bool> ();
 							using (linkedCts.Token.Register (s => ((TaskCompletionSource<bool>)s).TrySetResult (true), tcs)) {
 								if (task != await Task.WhenAny (task, tcs.Task)) {
-									//throw new OperationCanceledException (cancellationToken);
-									Console.WriteLine ("Token cancelled, close UdpClient");
 									client.Close ();
 								}
 							}
@@ -134,11 +131,9 @@ namespace OnvifDiscovery
 						}
 					} catch (OperationCanceledException) {
 						// Either the user canceled the action or the timeout has fired
-						Console.WriteLine ("Operation Cancelled");
-					} catch (Exception ex) {
+					} catch (Exception) {
 						// we catch all exceptions !
 						// Something might be bad in the response of a camera when call ReceiveAsync (BeginReceive in socket) fail
-						Console.WriteLine ($"Discovery Exception: {ex.Message}");
 					}
 				}
 			} finally {
